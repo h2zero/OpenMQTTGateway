@@ -35,7 +35,7 @@ void processRN8209(uint8_t cmd_mode)
 	uint8_t uart_rxbuf[200];
 	//uint8_t uart_txbuf[200];
 	int buflen;
-	static uint8_t mode=0;
+	static uint8_t mode = cmd_mode;
 	static uint8_t calibrate_step = 0;
 	static uint32_t  ref_voltage =0;
 	static uint32_t  ref_current =0;
@@ -43,9 +43,9 @@ void processRN8209(uint8_t cmd_mode)
 	static uint8_t  init_flag = 0;
 	static uint8_t 	init_result =0;
 
-	DynamicJsonDocument doc(1024);
+//	DynamicJsonDocument doc(1024);
 	DynamicJsonDocument resp(512);
-
+/*
 	if(cmd_mode)
 	{
 		buflen = uart_read_bytes(UART_NUM_0, uart_rxbuf, (uint32_t )200, 50/portTICK_PERIOD_MS);
@@ -199,11 +199,11 @@ void processRN8209(uint8_t cmd_mode)
 			}
 		}
 	}
-
+*/
 	switch(mode)
 	{
 		case 0: //��ʼ������
-			if(init_8209c_interface()==1)
+			/*if(init_8209c_interface()==1)
 			{
 				mode = 2;
 				if(init_flag)
@@ -227,7 +227,7 @@ void processRN8209(uint8_t cmd_mode)
 					uart_write_bytes(UART_NUM_0, output.c_str(), output.length());
 				}
 			}
-			break;
+			break;*/
 		case 1:  //У׼����
 			if(calibrate_step==1)
 			{
@@ -277,15 +277,18 @@ void processRN8209(uint8_t cmd_mode)
 				}
 			}
 			{
-				resp["set"] = 2;
-				resp["step"] = calibrate_step;
+				//resp["set"] = 2;
+				//resp["step"] = calibrate_step;
 				resp["voltage"] = rn8209_value.voltage;
 				resp["current"] = rn8209_value.current;
 				resp["power"] = rn8209_value.power;
-				String output = resp.as<String>();
-				uart_write_bytes(UART_NUM_0, output.c_str(), output.length());
+				JsonObject data = resp.to<JsonObject>();
+				pub("/RN8209toMQTT", data);
+				//String output = resp.as<String>();
+				//uart_write_bytes(UART_NUM_0, output.c_str(), output.length());
+
 			}
-			mode = 2;
+			//mode = 2;
 			break;
 		case 2:
 			rn8209c_read_voltage(&rn8209_value.voltage);
@@ -315,9 +318,8 @@ void processRN8209(uint8_t cmd_mode)
 		case 3:
 			break;
 	}
-	delay(10000);
 }
-
+/*
 void rn8209UartInit() {
     uart_config_t uart_config =
     {
@@ -332,24 +334,25 @@ void rn8209UartInit() {
     uart_set_pin(UART_NUM_0, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     uart_driver_install(UART_NUM_0, 256, 256, 0, NULL,0);
 }
-
-void rn8209_user_init(void *cmd_mode)
+*/
+void rn8209_user_init(void *mode)
 {
-	if(*(uint8_t*)cmd_mode)
+	if(*(uint8_t*)mode)
 	{
 		relay_open();
-		rn8209UartInit();
+		//rn8209UartInit();
 	}
 	while(1)
 	{
-		processRN8209(*(uint8_t*)cmd_mode);
+		processRN8209(1);
+		delay(10000);
 	}
 }
 
 void start_rn8209()
 {
-    user_led_init();  // led init
+    //user_led_init();  // led init
+	init_8209c_interface();
 	read_rn8209_param();
-    uint8_t cmd = 1;
-	xTaskCreate(rn8209_user_init, "rn8209c process", RN8209_TASK_STACK_SIZE, &cmd, RN8209_TASK_PRIO, NULL);
+	xTaskCreate(rn8209_user_init, "rn8209c process", RN8209_TASK_STACK_SIZE, NULL, RN8209_TASK_PRIO, NULL);
 }
