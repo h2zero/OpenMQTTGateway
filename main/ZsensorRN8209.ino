@@ -337,11 +337,11 @@ void rn8209UartInit() {
 */
 void rn8209_user_init(void *mode)
 {
-	if(*(uint8_t*)mode)
+	/*if(*(uint8_t*)mode)
 	{
 		relay_open();
 		//rn8209UartInit();
-	}
+	}*/
 	while(1)
 	{
 		processRN8209(1);
