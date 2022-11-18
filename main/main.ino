@@ -609,8 +609,6 @@ void setup() {
   digitalWrite(LED_INFO, !LED_INFO_ON);
   digitalWrite(LED_ERROR, !LED_ERROR_ON);
 
-  start_rn8209();
-
 #if defined(ESP8266) || defined(ESP32)
 #  ifdef ESP8266
 #    ifndef ZgatewaySRFB // if we are not in sonoff rf bridge case we apply the ESP8266 GPIO optimization
@@ -823,6 +821,9 @@ void setup() {
 #    undef ACTIVE_RECEIVER
 #  endif
 #  define ACTIVE_RECEIVER ACTIVE_RTL
+#endif
+#ifdef ZsensorRN8209
+  start_rn8209();
 #endif
 #if defined(ZgatewayRTL_433) || defined(ZgatewayRF) || defined(ZgatewayPilight) || defined(ZgatewayRF2)
 #  ifdef DEFAULT_RECEIVER // Allow defining of default receiver as a compiler directive

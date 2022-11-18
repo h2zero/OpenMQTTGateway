@@ -353,6 +353,6 @@ void start_rn8209()
 {
     //user_led_init();  // led init
 	init_8209c_interface();
-	read_rn8209_param();
+	//read_rn8209_param(); // remove for now, TODO: load calibration from flash
 	xTaskCreate(rn8209_user_init, "rn8209c process", RN8209_TASK_STACK_SIZE, NULL, RN8209_TASK_PRIO, NULL);
 }
