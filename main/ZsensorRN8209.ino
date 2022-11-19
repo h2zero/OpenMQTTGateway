@@ -279,10 +279,10 @@ void processRN8209(uint8_t cmd_mode)
 			{
 				//resp["set"] = 2;
 				//resp["step"] = calibrate_step;
-				resp["voltage"] = rn8209_value.voltage;
-				resp["current"] = rn8209_value.current;
-				resp["power"] = rn8209_value.power;
 				JsonObject data = resp.to<JsonObject>();
+				data["voltage"] = rn8209_value.voltage;
+				data["current"] = rn8209_value.current;
+				data["power"] = rn8209_value.power;
 				pub("/RN8209toMQTT", data);
 				//String output = resp.as<String>();
 				//uart_write_bytes(UART_NUM_0, output.c_str(), output.length());
