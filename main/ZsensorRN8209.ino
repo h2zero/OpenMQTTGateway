@@ -47,6 +47,7 @@ void start_rn8209() {
   STU_8209C cal = {0};
   cal.Ku = 18570;
   cal.Kia = 136702;
+  cal.EC = 10000;
   set_user_param(cal);
   init_8209c_interface();
   xTaskCreate(rn8209_loop, "rn8209_loop", RN8209_TASK_STACK_SIZE, NULL, RN8209_TASK_PRIO, NULL);
