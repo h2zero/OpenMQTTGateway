@@ -34,9 +34,9 @@ void rn8209_loop(void* mode) {
     }
 
     JsonObject data = doc.to<JsonObject>();
-    data["voltage"] = voltage;
-    data["current"] = current;
-    data["power"] = power;
+    data["voltage"] = (float)voltage / 1000.0;
+    data["current"] = (float)current / 10000.0;
+    data["power"] = (float)power / 10000.0;
     pub("/RN8209toMQTT", data);
     delay(10000);
   }
