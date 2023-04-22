@@ -1,0 +1,12 @@
+{
+  "name": "OpenMQTTGateway",
+  "improv": false,
+  "version": "version_tag",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP8266",
+      "parts": [{ "path": "/firmware_build/nodemcuv2-weatherstation-firmware.bin", "offset": 0 }]
+    }
+  ]
+}
