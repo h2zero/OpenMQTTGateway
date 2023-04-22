@@ -3,3 +3,7 @@
 *_env.ini
 **/.DS_Store
 node_modules
+docs/.vuepress/components
+docs/.vuepress/dist
+docs/.vuepress/public/*.bin
+docs/.vuepress/public/*.json
