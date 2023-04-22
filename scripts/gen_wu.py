@@ -7,10 +7,12 @@ import shutil
 
 mf_temp32 = string.Template('''{
   "name": "OpenMQTTGateway",
+  "improv": false,
+  "version": "version_tag",
+  "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32",
-      "improv": false,
       "parts": [
         { "path": "$cp$bl", "offset": 4096 },
         { "path": "$cp$part", "offset": 32768 },
@@ -23,6 +25,9 @@ mf_temp32 = string.Template('''{
 
 mf_temp8266 = string.Template('''{
   "name": "OpenMQTTGateway",
+  "improv": false,
+  "version": "version_tag",
+  "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP8266",
@@ -50,10 +55,8 @@ wu_temp_p2 = '''
 
 wu_temp_end = '''
       </optgroup>
-    </select><br><br>
-    <input type="checkbox" id="erase" checked>
-    <label for="erase"> Erase Flash (erases all saved data)</label><br><br>
-    <esp-web-install-button erase-first></esp-web-install-button>
+      <esp-web-install-button></esp-web-install-button>
+    </select>
   </div>
 </template>
 
@@ -61,19 +64,11 @@ wu_temp_end = '''
 export default {
   mounted () {
     const espWebInstallButton = document.querySelector("esp-web-install-button");
-    const eraseCheck = document.getElementById("erase");
     espWebInstallButton.addEventListener("state-changed", (ev) => { console.log(ev.detail) });
     const selectFW = document.querySelector("select");
     espWebInstallButton.manifest = selectFW.value;
     selectFW.addEventListener("change", () => {
       espWebInstallButton.manifest = selectFW.value;
-    });
-    eraseCheck.addEventListener("change", (ev) => {
-      if (eraseCheck.checked) {
-        espWebInstallButton.setAttribute('erase-first','');
-      } else {
-        espWebInstallButton.removeAttribute('erase-first');
-      }
     });
   }
 }
@@ -104,7 +99,7 @@ if not os.path.exists(manif_path):
     os.makedirs(manif_path)
 
 # copy OTA latest version definition
-shutil.move("scripts/latest_version.json", manif_path + "latest_version.json")
+shutil.copy("scripts/latest_version.json", manif_path + "latest_version.json")
 
 if not os.path.exists(vue_path):
     os.makedirs(vue_path)
@@ -124,7 +119,7 @@ with open(manif_path + filename, 'wb') as output_file:
 
 for item in range(len(assets)):
     name = assets[item]['name']
-    if 'firmware.bin' in name and ('esp32' in name or 'ttgo' in name or 'heltec' in name or 'thingpulse' in name or 'lilygo' in name or 'shelly' in name):
+    if 'factory.bin' in name and ('esp32' in name or 'ttgo' in name or 'heltec' in name or 'thingpulse' in name or 'lilygo' in name or 'shelly' in name):
         fw = name.split('-firmware')[0]
         man_file = fw + '.manifest.json'
         fw_url = assets[item]['browser_download_url']

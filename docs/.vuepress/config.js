@@ -9,7 +9,6 @@ module.exports = {
       ['link', { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png"}],
       ['link', { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png"}],
       ['link', { rel: 'icon', href: '/img/Openmqttgateway_logo_mini.png' }],
-      ['link', { rel: 'manifest', href: '/manifest.json' }],
       ['meta', { name: 'theme-color', content: '#3eaf7c' }],
       ['meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }],
       ['meta', { name: 'apple-mobile-web-app-status-bar-style', content: 'black' }],
@@ -17,7 +16,7 @@ module.exports = {
       ['link', { rel: 'mask-icon', href: '/icons/safari-pinned-tab.svg', color: '#3eaf7c' }],
       ['meta', { name: 'msapplication-TileImage', content: '/favicon-144x144.png' }],
       ['meta', { name: 'msapplication-TileColor', content: '#000000' }],
-      ['script', {type: 'module', src: 'https://unpkg.com/esp-web-tools@3.4.2/dist/web/install-button.js?module'}]
+      ['script', {type: 'module', src: 'https://unpkg.com/esp-web-tools@9/dist/web/install-button.js?module'}]
     ],
     themeConfig: {
       smoothScroll: true,
