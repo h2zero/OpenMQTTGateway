@@ -1,15 +1,15 @@
-/*  
+/*
   Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your SERIAL device and a MQTT broker 
+   Act as a wifi or ethernet gateway between your SERIAL device and a MQTT broker
    Send and receiving command by MQTT
- 
-   This files enables to set your parameter for the SERIAL gateway 
-  
+
+   This files enables to set your parameter for the SERIAL gateway
+
     Copyright: (c)Florian ROBERT
-  
+
     This file is part of OpenMQTTGateway.
-    
+
     OpenMQTTGateway is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
@@ -31,6 +31,7 @@
 extern void setupSERIAL();
 extern void SERIALtoX();
 extern bool XtoSERIAL(const char* topicOri, JsonObject& SERIALdata);
+extern uint32_t waitForSerialOtaAck();
 
 /*-------------------SERIAL topics & parameters----------------------*/
 
@@ -79,6 +80,10 @@ extern bool XtoSERIAL(const char* topicOri, JsonObject& SERIALdata);
 //Setup for SERIAL
 #ifndef SERIALBaud
 #  define SERIALBaud 9600 // The serial connection Baud
+#endif
+
+#ifndef SERIAL_OTA_BUFFER_SIZE
+#  define SERIAL_OTA_BUFFER_SIZE 4096 // Size of the buffer for OTA updates via serial
 #endif
 
 /*-------------------PIN DEFINITIONS----------------------*/
@@ -137,5 +142,11 @@ extern bool XtoSERIAL(const char* topicOri, JsonObject& SERIALdata);
 #    define SERIAL_TX_GPIO 14
 #  endif
 #endif
+
+enum {
+  SERIAL_OTA_OK = 0,
+  SERIAL_OTA_RESEND,
+  SERIAL_OTA_ABORT,
+};
 
 #endif

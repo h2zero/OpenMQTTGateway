@@ -1479,6 +1479,10 @@ void handleUP() {
     DynamicJsonDocument jsonBuffer(JSON_MSG_BUFFER);
     JsonObject WEBtoSYS = jsonBuffer.to<JsonObject>();
 
+    if (server.hasArg("s")) {
+      WEBtoSYS["sec_module"] = server.arg("s");
+    }
+
     if (server.hasArg("o")) {
       WEBtoSYS["url"] = server.arg("o");
       WEBtoSYS["version"] = "test";

@@ -12,6 +12,7 @@ lib/*
 !lib/LEDManager
 CMakeLists.txt
 dependencies.lock
+sdkconfig
 sdkconfig.*
 !sdkconfig.defaults
 __pycache__

@@ -530,6 +530,9 @@ void buildTopicFromId(JsonObject& Jsondata, const char* origin) {
 
 // Empty the documents queue
 void emptyQueue() {
+  if (Update.isRunning()) {
+    return;
+  }
   queueLength = jsonQueue.size();
   if (queueLength > maxQueueLength) {
     maxQueueLength = queueLength;
@@ -3081,7 +3084,8 @@ void receivingDATA(const char* topicOri, const char* datacallback) {
 String latestVersion;
 #  ifdef ESP32
 #    include <HTTPClient.h>
-#    include <HTTPUpdate.h>
+
+#    include "HTTPSerialUpdate.h"
 
 #    if CHECK_OTA_UPDATE
 /**
@@ -3227,6 +3231,10 @@ void MQTTHttpsFWUpdate(const char* topicOri, JsonObject& HttpsFwUpdateData) {
           ota_cert = OTAserver_cert;
         }
       }
+
+#  ifdef SecondaryModule
+      httpUpdate.setUpdateSecondary(HttpsFwUpdateData.containsKey("sec_module"));
+#  endif
 
       t_httpUpdate_return result = HTTP_UPDATE_FAILED;
       if (strstr(url, "http:")) {

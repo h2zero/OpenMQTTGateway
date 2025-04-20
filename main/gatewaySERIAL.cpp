@@ -1,17 +1,17 @@
-/*  
+/*
   Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your SERIAL device and a MQTT broker 
+   Act as a wifi or ethernet gateway between your SERIAL device and a MQTT broker
    Send and receiving command by MQTT
- 
+
   This gateway enables to:
  - receive MQTT data from a topic and send SERIAL signal corresponding to the received MQTT data
  - publish MQTT data to a different topic related to received SERIAL signal
 
     Copyright: (c)Florian ROBERT
-  
+
     This file is part of OpenMQTTGateway.
-    
+
     OpenMQTTGateway is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
@@ -28,8 +28,12 @@
 #include "User_config.h"
 
 #ifdef ZgatewaySERIAL
+#  ifdef SerialOTAModule
+#    include <Update.h>
+#  endif
 #  include "TheengsCommon.h"
 #  include "config_SERIAL.h"
+#  include "libb64/cdecode.h"
 
 #  ifndef SERIAL_UART // software serial mode
 #    include <SoftwareSerial.h>
@@ -38,6 +42,8 @@ SoftwareSerial SERIALSoftSerial(SERIAL_RX_GPIO, SERIAL_TX_GPIO); // RX, TX
 
 #  ifdef ESP32
 SemaphoreHandle_t serialSemaphore = NULL;
+extern TaskHandle_t serialOtaTaskHandle;
+extern bool BTProcessLock;
 const TickType_t semaphoreTimeout = pdMS_TO_TICKS(1000); // 1 second timeout
 #    undef SEMAPHORE_SERIAL
 #    undef SEMAPHORE_SERIAL_GIVE
@@ -71,6 +77,28 @@ bool isOverflow = false;
 static void sendHeartbeat();
 static void sendHeartbeatAck();
 static void handleHeartbeat();
+
+#  if defined(SerialOTAModule) || defined(SecondaryModule)
+// TODO: Move to TheengsUtils?
+uint16_t calcCrc16(const uint8_t* buf, int len) {
+  uint16_t crc = 0;
+  int32_t i;
+
+  while (len--) {
+    crc ^= *buf++ << 8;
+
+    for (i = 0; i < 8; i++) {
+      if (crc & 0x8000) {
+        crc = (crc << 1) ^ 0x1021;
+      } else {
+        crc = crc << 1;
+      }
+    }
+  }
+
+  return crc;
+}
+#  endif
 
 void setupSERIAL() {
 //Initalize serial port
@@ -193,34 +221,123 @@ void sendHeartbeatAck() {
   }
 }
 
+#    ifdef SerialOTAModule
+void sendSerialOtaAck(const char* msg) {
+  if (SEMAPHORE_SERIAL) {
+    SERIALStream->print(SERIALPre);
+    if (msg) { // If msg is not null there was an error, send a NACK with the message
+      SERIALStream->print("{\"serial_ota\":\"nack\",\"msg\":\"");
+      SERIALStream->print(msg);
+      SERIALStream->print("\"}");
+    } else {
+      SERIALStream->print("{\"serial_ota\":\"ack\"}");
+    }
+    SERIALStream->print(SERIALPost);
+    SERIALStream->flush();
+    Log.notice(F("Sent serial ota ack" CR));
+    SEMAPHORE_SERIAL_GIVE;
+  } else {
+    Log.error(F("Failed to take serialSemaphore" CR));
+  }
+}
+#    endif
+
+#    ifdef SecondaryModule
+uint32_t waitForSerialOtaAck() {
+  uint32_t rc;
+  if (xTaskNotifyWait(ULONG_MAX, ULONG_MAX, &rc, pdMS_TO_TICKS(3000)) != pdTRUE) {
+    Log.error(F("Serial OTA timeout" CR));
+    rc = SERIAL_OTA_ABORT;
+  }
+  return rc;
+}
+
+bool sendSerialOtaData(const char* data, size_t size) {
+  if (SEMAPHORE_SERIAL) {
+    SERIALStream->write(data, size);
+    SERIALStream->flush();
+    Log.notice(F("Sent serial ota %d bytes" CR), size);
+    SEMAPHORE_SERIAL_GIVE;
+    return true;
+  } else {
+    Log.error(F("Failed to take serialSemaphore" CR));
+  }
+  return false;
+}
+#    endif
+
 void SERIALtoX() {
+#    ifdef SerialOTAModule
+  static size_t ota_packet_size = 0; // Size of the OTA packet
+  static size_t ota_packet_index = 0; // Offset for the OTA packet
+  static uint16_t ota_packet_crc = 0; // CRC of the OTA packet
+  static unsigned long ota_packet_start_time = 0; // Start time of the OTA packet
+  static uint8_t* ota_packet_buffer = nullptr; // Buffer for OTA data
+#    endif
   static String buffer = ""; // Static buffer to store incomplete messages
   unsigned long currentTime = millis();
 
 #    ifdef SENDER_SERIAL_HEARTBEAT
   // Check if it's time to send a heartbeat and we're not in overflow
-  if (!isOverflow && currentTime - lastHeartbeatSent > heartbeatInterval) {
-    sendHeartbeat();
-    lastHeartbeatSent = currentTime;
-  }
-  if (currentTime - lastHeartbeatAckReceivedCheck > heartbeatAckCheckInterval) {
-    lastHeartbeatAckReceivedCheck = currentTime;
-    // Check if we received an ack for the last heartbeat
-    if (currentTime - lastHeartbeatAckReceived > heartbeatTimeout) {
-      // No ack received, increase the interval (with a maximum limit)
-      unsigned long newHeartbeatInterval = heartbeatInterval * 1.25;
-      heartbeatInterval = min(newHeartbeatInterval, maxHeartbeatInterval);
-      Log.warning(F("No heartbeat ack received. Increasing interval to %lu ms" CR), heartbeatInterval);
-      receiverReady = false;
-    } else {
-      // Ack received, reset the interval
-      heartbeatInterval = 5000;
+  if (!Update.isRunning()) {
+    if (!isOverflow && currentTime - lastHeartbeatSent > heartbeatInterval) {
+      sendHeartbeat();
+      lastHeartbeatSent = currentTime;
+    }
+    if (currentTime - lastHeartbeatAckReceivedCheck > heartbeatAckCheckInterval) {
+      lastHeartbeatAckReceivedCheck = currentTime;
+      // Check if we received an ack for the last heartbeat
+      if (currentTime - lastHeartbeatAckReceived > heartbeatTimeout) {
+        // No ack received, increase the interval (with a maximum limit)
+        unsigned long newHeartbeatInterval = heartbeatInterval * 1.25;
+        heartbeatInterval = min(newHeartbeatInterval, maxHeartbeatInterval);
+        Log.warning(F("No heartbeat ack received. Increasing interval to %lu ms" CR), heartbeatInterval);
+        receiverReady = false;
+      } else {
+        // Ack received, reset the interval
+        heartbeatInterval = 5000;
+      }
     }
   }
 #    else
   receiverReady = true;
 #    endif
+
+#    ifdef SerialOTAModule
+  if (ota_packet_size > 0) {
+    // Check if the OTA packet timeout is exceeded
+    if (currentTime - ota_packet_start_time > 1000) {
+      Log.error(F("OTA packet timeout, %d bytes missing" CR), ota_packet_size);
+      ota_packet_size = 0;
+      sendSerialOtaAck("OTA packet timeout - resend");
+      return;
+    }
+  }
+#    endif
   while (SERIALStream->available()) {
+#    ifdef SerialOTAModule
+    if (ota_packet_index < ota_packet_size) {
+      // If we are in OTA mode, read the data into the buffer
+      ota_packet_buffer[ota_packet_index++] = SERIALStream->read();
+      if (ota_packet_index == ota_packet_size) {
+        // Check CRC
+        uint16_t crc = calcCrc16(ota_packet_buffer, ota_packet_size);
+        if (crc != ota_packet_crc) {
+          Log.error(F("OTA data CRC mismatch: expected %04X, got %04X" CR), ota_packet_crc, crc);
+          sendSerialOtaAck("CRC mismatch - resend");
+          ota_packet_size = 0;
+        } else if (Update.write(ota_packet_buffer, ota_packet_size) != ota_packet_size) {
+          Log.error(F("Failed to write OTA data: %d" CR), Update.getError());
+          sendSerialOtaAck("Failed to write OTA data");
+        } else {
+          Log.notice(F("OTA data written successfully" CR));
+          sendSerialOtaAck(NULL);
+        }
+      }
+      continue;
+    }
+#    endif
+
     unsigned long now = millis();
     char c = SERIALStream->read();
     buffer += c;
@@ -246,6 +363,97 @@ void SERIALtoX() {
           lastHeartbeatAckReceived = now;
           receiverReady = true;
           Log.notice(F("Heartbeat ack received" CR));
+#    ifdef SerialOTAModule
+        } else if (SERIALdata.containsKey("serial_ota") && strcmp(SERIALdata["serial_ota"], "begin") == 0) {
+          // Start OTA update via serial
+          Log.notice(F("Starting OTA update via serial" CR));
+          if (SERIALdata.containsKey("size") && SERIALdata.containsKey("md5")) {
+            uint32_t size = SERIALdata["size"];
+            String md5 = SERIALdata["md5"];
+            int command = SERIALdata["command"] | U_FLASH; // Default to U_FLASH if not provided
+            if (!Update.begin(size, command)) {
+              Log.error(F("Update.begin failed! %d" CR), Update.getError());
+              sendSerialOtaAck("Update.begin failed!");
+              buffer = "";
+              return;
+            }
+
+            if (md5.length() && !Update.setMD5(md5.c_str())) {
+              Log.error(F("Update.setMD5 failed! %s" CR), md5.c_str());
+              sendSerialOtaAck("Update.setMD5 failed!");
+              buffer = "";
+              return;
+            }
+
+            BTProcessLock = true;
+
+            if (ota_packet_buffer == nullptr) {
+              ota_packet_buffer = new uint8_t[SERIAL_OTA_BUFFER_SIZE];
+            }
+            if (ota_packet_buffer == nullptr) {
+              Log.error(F("Failed to allocate OTA buffer" CR));
+              sendSerialOtaAck("Failed to allocate OTA buffer!");
+              buffer = "";
+              return;
+            }
+            sendSerialOtaAck(NULL); // Send ack for OTA begin
+          } else {
+            Log.error(F("Invalid OTA update parameters" CR));
+          }
+        } else if (SERIALdata.containsKey("serial_ota") && strcmp(SERIALdata["serial_ota"], "data") == 0) {
+          // Handle OTA data
+          if (SERIALdata.containsKey("size") && SERIALdata.containsKey("crc")) {
+            ota_packet_size = SERIALdata["size"];
+            ota_packet_crc = SERIALdata["crc"];
+            ota_packet_index = 0;
+            ota_packet_start_time = now;
+            if (ota_packet_size > SERIAL_OTA_BUFFER_SIZE) {
+              ota_packet_size = 0;
+              Log.error(F("Data size too large: %d" CR), ota_packet_size);
+              sendSerialOtaAck("Data size too large!");
+            } else {
+              Log.notice(F("Waiting for OTA data of size: %d" CR), ota_packet_size);
+              sendSerialOtaAck(NULL); // Send ack for OTA data
+            }
+          } else {
+            Log.error(F("Missing data size in OTA data" CR));
+            sendSerialOtaAck("Missing data size!");
+          }
+        } else if (SERIALdata.containsKey("serial_ota") && strcmp(SERIALdata["serial_ota"], "end") == 0) {
+          ota_packet_size = 0;
+          if (Update.end()) {
+            Log.notice(F("OTA update ended successfully" CR));
+            sendSerialOtaAck(NULL);
+          } else {
+            Log.error(F("Failed to end OTA update" CR));
+            sendSerialOtaAck("Update.end failed!");
+          }
+        } else if (SERIALdata.containsKey("serial_ota") && strcmp(SERIALdata["serial_ota"], "abort") == 0) {
+          ota_packet_size = 0;
+          Update.abort();
+          Log.notice(F("OTA update aborted" CR));
+          sendSerialOtaAck(NULL); // Send ack for OTA abort
+        } else if (SERIALdata.containsKey("serial_ota") && strcmp(SERIALdata["serial_ota"], "begin") == 0) {
+          // Start OTA update via serial
+          Log.notice(F("Starting OTA update via serial" CR));
+          sendSerialOtaAck(NULL); // Send ack for OTA begin
+#    elif defined(SecondaryModule)
+        } else if (SERIALdata.containsKey("serial_ota") && (strcmp(SERIALdata["serial_ota"], "ack") == 0 || strcmp(SERIALdata["serial_ota"], "nack") == 0)) {
+          // Handle OTA ack/nack
+          if (strcmp(SERIALdata["serial_ota"], "ack") == 0) {
+            Log.notice(F("Received OTA ack" CR));
+            xTaskNotify(serialOtaTaskHandle, SERIAL_OTA_OK, eSetValueWithOverwrite);
+          } else {
+            Log.error(F("Received OTA nack: %s" CR), SERIALdata["msg"].as<const char*>());
+            if (strstr(SERIALdata["msg"].as<const char*>(), "resend")) {
+              Log.notice(F("Resend OTA request" CR));
+              xTaskNotify(serialOtaTaskHandle, SERIAL_OTA_RESEND, eSetValueWithOverwrite);
+            } else {
+              Log.error(F("Abort OTA request" CR));
+              xTaskNotify(serialOtaTaskHandle, SERIAL_OTA_ABORT, eSetValueWithOverwrite);
+            }
+          }
+#    endif
         } else {
           // Process normal messages
           Log.notice(F("SERIAL msg received: %s" CR), jsonString.c_str());
